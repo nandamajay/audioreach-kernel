@@ -200,7 +200,7 @@ static void audioreach_get_link_name(const char **link_name, int dai_id)
 		break;
 	}
 }
-
+#if 0
 static int qcs6490_snd_parse_of(struct snd_soc_card *card)
 {
 	struct device_node *np;
@@ -323,11 +323,29 @@ static int qcs6490_snd_parse_of(struct snd_soc_card *card)
 			link->ignore_suspend = 1;
 			link->nonatomic = 1;
 		}
+<<<<<<< HEAD
+		pr_err("[nandam-machine] BEFORE cpus->dai_name=%s, cpus->of_node=%p\n",link->cpus->dai_name ? link->cpus->dai_name : "NULL",link->cpus->of_node);
+		pr_err("[nandam-machine] Overriding CPU and Platform DAI with snd_soc_dummy_dlc for link: %s\n", link->name);
 
+		link->cpus	= &snd_soc_dummy_dlc;//&dlc[0];
+		link->platforms	= &snd_soc_dummy_dlc;//&dlc[1];
 		audioreach_get_link_name(&link->name, link->id);
 		link->stream_name = link->name;
 		link++;
+		pr_err("[nandam-machine] AFTER cpus->dai_name=%s, cpus->of_node=%p\n",link->cpus->dai_name ? link->cpus->dai_name : "NULL",link->cpus->of_node);
 
+=======
+		/*pr_err("[nandam-machine] BEFORE cpus->dai_name=%s, cpus->of_node=%p\n",link->cpus->dai_name ? link->cpus->dai_name : "NULL",link->cpus->of_node);
+		pr_err("[nandam-machine] Overriding CPU and Platform DAI with snd_soc_dummy_dlc for link: %s\n", link->name);
+
+		link->cpus	= &snd_soc_dummy_dlc;//&dlc[0];
+		link->platforms	= &snd_soc_dummy_dlc;//&dlc[1];*/
+		audioreach_get_link_name(&link->name, link->id);
+		link->stream_name = link->name;
+		link++;
+/*		pr_err("[nandam-machine] AFTER cpus->dai_name=%s, cpus->of_node=%p\n",link->cpus->dai_name ? link->cpus->dai_name : "NULL",link->cpus->of_node);
+*/
+>>>>>>> fd31967 (ASoC: audioreach: Add debug prints and override CPU/Platform DAI with dummy)
 		of_node_put(cpu);
 		of_node_put(codec);
 		of_node_put(platform);
@@ -339,6 +357,205 @@ static int qcs6490_snd_parse_of(struct snd_soc_card *card)
 	}
 
 	return 0;
+err:
+	of_node_put(cpu);
+	of_node_put(codec);
+	of_node_put(platform);
+err_put_np:
+	of_node_put(np);
+	return ret;
+}
+#endif
+
+int qcs6490_snd_parse_of(struct snd_soc_card *card)
+{
+	struct device_node *np;
+	struct device_node *codec = NULL;
+	struct device_node *platform = NULL;
+	struct device_node *cpu = NULL;
+	struct device *dev = card->dev;
+	struct snd_soc_dai_link *link;
+	struct of_phandle_args args;
+	struct snd_soc_dai_link_component *dlc;
+	int ret, num_links;
+
+	dev_err(dev, "[AJAY:MD]  %s %d\n",__func__,__LINE__);
+	ret = snd_soc_of_parse_card_name(card, "model");
+	if (ret == 0 && !card->name)
+		/* Deprecated, only for compatibility with old device trees */
+		ret = snd_soc_of_parse_card_name(card, "qcom,model");
+	if (ret) {
+		dev_err(dev, "Error parsing card name: %d\n", ret);
+		return ret;
+	}
+
+	if (of_property_present(dev->of_node, "widgets")) {
+		ret = snd_soc_of_parse_audio_simple_widgets(card, "widgets");
+		if (ret)
+			return ret;
+	}
+
+	/* DAPM routes */
+	if (of_property_present(dev->of_node, "audio-routing")) {
+		ret = snd_soc_of_parse_audio_routing(card, "audio-routing");
+		if (ret)
+			return ret;
+	}
+	/* Deprecated, only for compatibility with old device trees */
+	if (of_property_present(dev->of_node, "qcom,audio-routing")) {
+		ret = snd_soc_of_parse_audio_routing(card, "qcom,audio-routing");
+		if (ret)
+			return ret;
+	}
+
+	ret = snd_soc_of_parse_pin_switches(card, "pin-switches");
+	if (ret)
+		return ret;
+
+	ret = snd_soc_of_parse_aux_devs(card, "aux-devs");
+	if (ret)
+		return ret;
+
+	/* Populate links */
+	num_links = of_get_available_child_count(dev->of_node);
+
+	/* Allocate the DAI link array */
+	card->dai_link = devm_kcalloc(dev, num_links, sizeof(*link), GFP_KERNEL);
+	if (!card->dai_link)
+		return -ENOMEM;
+
+	card->num_links = num_links;
+	link = card->dai_link;
+
+	for_each_available_child_of_node(dev->of_node, np) {
+		const char *cpu_before = "(nil)";
+		const char *cpu_after  = "(nil)";
+		const char *plat_before = "(nil)";
+		const char *plat_after  = "(nil)";
+		bool force_dummy = false;
+
+		dlc = devm_kcalloc(dev, 2, sizeof(*dlc), GFP_KERNEL);
+		if (!dlc) {
+			ret = -ENOMEM;
+			goto err_put_np;
+		}
+
+		link->cpus      = &dlc[0];
+		link->platforms = &dlc[1];
+
+		link->num_cpus      = 1;
+		link->num_platforms = 1;
+
+		ret = of_property_read_string(np, "link-name", &link->name);
+		if (ret) {
+			dev_err(card->dev, "error getting codec dai_link name\n");
+			goto err_put_np;
+		}
+
+		cpu   = of_get_child_by_name(np, "cpu");
+		codec = of_get_child_by_name(np, "codec");
+
+		if (!cpu) {
+			dev_err(dev, "%s: Can't find cpu DT node\n", link->name);
+			ret = -EINVAL;
+			goto err;
+		}
+
+		ret = snd_soc_of_get_dlc(cpu, &args, link->cpus, 0);
+		if (ret) {
+			dev_err_probe(card->dev, ret,
+				      "%s: error getting cpu dai name\n",
+				      link->name);
+			goto err;
+		}
+
+		link->id = args.args[0];
+
+		if (link->cpus && link->cpus->dai_name)
+			cpu_before = link->cpus->dai_name;
+		if (link->platforms && link->platforms->of_node)
+			plat_before = of_node_full_name(link->platforms->of_node);
+
+		dev_err(dev,
+			 "[AJAY:MD] BEFORE link '%s' (id=%d): cpu_dai=%s plat_of=%s\n",
+			 link->name, link->id, cpu_before, plat_before);
+
+		/* Normal DT-based platform = same of_node as CPU */
+		link->platforms->of_node = link->cpus->of_node;
+
+		/*
+		 * TEMP EXPERIMENT:
+		 * Force HS0 MI2S Playback BE to use dummy CPU + dummy platform.
+		 * You can swap this to (link->id == 16) once you confirm IDs.
+		 */
+		if (!strcmp(link->name, "HS0 MI2S Playback"))
+			force_dummy = true;
+
+		if (force_dummy) {
+			dev_err(dev,
+				 "[AJAY:MD] forcing BE '%s' (id=%d) CPU+platform to dummy\n",
+				 link->name, link->id);
+
+			link->cpus          = &snd_soc_dummy_dlc;
+			link->num_cpus      = 1;
+			link->platforms     = &snd_soc_dummy_dlc;
+			link->num_platforms = 1;
+		}
+
+		if (link->cpus && link->cpus->dai_name)
+			cpu_after = link->cpus->dai_name;
+		if (link->platforms && link->platforms->of_node)
+			plat_after = of_node_full_name(link->platforms->of_node);
+
+		dev_err(dev,
+			 "[AJAY:MD] AFTER  link '%s' (id=%d): cpu_dai=%s plat_of=%s\n",
+			 link->name, link->id, cpu_after, plat_after);
+
+		if (codec) {
+			ret = snd_soc_of_get_dai_link_codecs(dev, codec, link);
+			if (ret < 0) {
+				dev_err_probe(card->dev, ret,
+					      "%s: codec dai not found\n",
+					      link->name);
+				goto err;
+			}
+
+			if (platform) {
+				/* DPCM backend */
+				link->no_pcm = 1;
+				link->ignore_pmdown_time = 1;
+			}
+		} else {
+			/* DPCM frontend */
+			link->codecs     = &snd_soc_dummy_dlc;
+			link->num_codecs = 1;
+			link->dynamic    = 1;
+		}
+
+		if (platform || !codec) {
+			/* DPCM */
+			link->ignore_suspend = 1;
+			link->nonatomic      = 1;
+		}
+
+		/* AudioReach-specific: canonicalize link name based on id */
+		audioreach_get_link_name(&link->name, link->id);
+
+		link->stream_name = link->name;
+		link++;
+
+		of_node_put(cpu);
+		of_node_put(codec);
+		of_node_put(platform);
+	}
+
+	if (!card->dapm_widgets) {
+		card->dapm_widgets     = qcom_jack_snd_widgets;
+		card->num_dapm_widgets = ARRAY_SIZE(qcom_jack_snd_widgets);
+	}
+
+	return 0;
+
 err:
 	of_node_put(cpu);
 	of_node_put(codec);
