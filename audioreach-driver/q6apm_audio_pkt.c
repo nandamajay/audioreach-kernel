@@ -117,7 +117,7 @@ struct gpr_port_map {
 	u32 src_port;
 	u32 dst_port;
 };
-
+u32 g_src_port=0,g_dst_port=0;
 #define dev_to_audpkt_dev(_dev) container_of(_dev, struct q6apm_audio_pkt, dev)
 #define cdev_to_audpkt_dev(_cdev) container_of(_cdev, struct q6apm_audio_pkt, cdev)
 
@@ -403,6 +403,7 @@ static int audpkt_chk_and_update_physical_addr(struct audio_gpr_pkt *gpr_pkt)
  * userspace client do a write() system call. All input arguments are
  * validated by the virtual file system before calling this function.
  */
+
 static ssize_t audio_pkt_write(struct file *file, const char __user *buf,
 			size_t count, loff_t *ppos)
 {
@@ -438,7 +439,8 @@ static ssize_t audio_pkt_write(struct file *file, const char __user *buf,
 
 	audpkt_port_map->src_port = audpkt_hdr->src_port;
 	audpkt_port_map->dst_port = audpkt_hdr->dest_port;
-
+	g_dst_port = audpkt_hdr->dest_port;
+	g_src_port = audpkt_hdr->src_port;
 	mutex_lock(&audpkt_dev->audpkt_port_lock);
 	ret = idr_alloc(&audpkt_dev->audpkt_port_idr, audpkt_port_map,
 			audpkt_hdr->token,
@@ -625,6 +627,8 @@ static int q6apm_audio_pkt_callback(struct gpr_resp_pkt *data, void *priv, int o
 		idr_remove(&apm->audpkt_port_idr, hdr->token);
 		kfree(audpkt_port_map);
 	} else {
+		hdr->dest_port = g_dst_port;//audpkt_port_map->src_port;
+		hdr->src_port = g_src_port;//audpkt_port_map->dst_port;
 		AUDIO_PKT_ERR("Token=%u not found\n", hdr->token);
 	}
 	mutex_unlock(&apm->audpkt_port_lock);
