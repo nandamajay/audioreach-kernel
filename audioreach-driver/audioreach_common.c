@@ -365,7 +365,7 @@ int qcs6490_snd_parse_of(struct snd_soc_card *card)
 	struct of_phandle_args args;
 	struct snd_soc_dai_link_component *dlc;
 	int ret, num_links;
-
+	dev_err(dev,"[AJAY:MD] %s %d\n",__func__,__LINE__);
 	ret = snd_soc_of_parse_card_name(card, "model");
 	if (ret == 0 && !card->name)
 		/* Deprecated, only for compatibility with old device trees */
@@ -462,7 +462,7 @@ int qcs6490_snd_parse_of(struct snd_soc_card *card)
 		if (link->platforms && link->platforms->of_node)
 			plat_before = of_node_full_name(link->platforms->of_node);
 
-		dev_info(dev,
+		dev_err(dev,
 			 "[AJAY:MD] BEFORE link '%s' (id=%d): cpu_dai=%s plat_of=%s\n",
 			 link->name, link->id, cpu_before, plat_before);
 
@@ -474,26 +474,28 @@ int qcs6490_snd_parse_of(struct snd_soc_card *card)
 		 * Force HS0 MI2S Playback BE to use dummy CPU + dummy platform.
 		 * You can swap this to (link->id == 16) once you confirm IDs.
 		 */
-		if (!strcmp(link->name, "HS0 MI2S Playback"))
+		//if (!strcmp(link->name, "HS0 MI2S Playback"))
 			force_dummy = true;
-
+#if 1
 		if (force_dummy) {
-			dev_info(dev,
+			dev_err(dev,
 				 "[AJAY:MD] forcing BE '%s' (id=%d) CPU+platform to dummy\n",
 				 link->name, link->id);
 
-			link->cpus          = &snd_soc_dummy_dlc;
-			link->num_cpus      = 1;
+		/*	link->cpus          = &snd_soc_dummy_dlc;
+			link->num_cpus      = 1;*/
+			link->cpus->dai_name = "snd-soc-dummy-dai";
+	     		link->cpus->of_node  = NULL;   /* bind by dai_name only */
 			link->platforms     = &snd_soc_dummy_dlc;
 			link->num_platforms = 1;
 		}
-
+#endif
 		if (link->cpus && link->cpus->dai_name)
 			cpu_after = link->cpus->dai_name;
 		if (link->platforms && link->platforms->of_node)
 			plat_after = of_node_full_name(link->platforms->of_node);
 
-		dev_info(dev,
+		dev_err(dev,
 			 "[AJAY:MD] AFTER  link '%s' (id=%d): cpu_dai=%s plat_of=%s\n",
 			 link->name, link->id, cpu_after, plat_after);
 
