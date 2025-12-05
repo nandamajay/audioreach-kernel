@@ -380,6 +380,8 @@ int qcs6490_snd_parse_of(struct snd_soc_card *card)
 	int ret, num_links;
 
 	dev_err(dev, "[AJAY:MD]  %s %d\n",__func__,__LINE__);
+	dev_err(dev, "[AJAY:MD]  %s %d\n",__func__,__LINE__);
+	dev_err(dev, "[AJAY:MD]  %s %d\n",__func__,__LINE__);
 	ret = snd_soc_of_parse_card_name(card, "model");
 	if (ret == 0 && !card->name)
 		/* Deprecated, only for compatibility with old device trees */
